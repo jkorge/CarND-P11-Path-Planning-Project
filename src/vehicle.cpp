@@ -1,10 +1,15 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include "Eigen-3.3/Eigen/Core"
+#include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/Dense"
 #include "spline.h"
 #include "vehicle.h"
 
 using namespace std;
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
 
 /**
 *Instantiate
@@ -73,6 +78,7 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 		ptsy[i] = (shift_x * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
 	}
 
+	
 	//Use spline to compute trajectory function
 	tk::spline s;
 	for(int i=1;i<ptsx.size();i++){
@@ -83,6 +89,13 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 	}
 
 	s.set_points(ptsx, ptsy);
+	
+
+	int n = 50-previous_path_x.size();
+	double target_x = buffer;
+	double target_y = s(target_x);
+	double target_dist = sqrt((target_x)*(target_x) + (target_y)*(target_y));
+	double x_add_on = 0;
 
 	//Start with whatever's currently in the path (since last frame was ran)
 	for(int i=0;i<previous_path_x.size();i++){
@@ -91,14 +104,7 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 	}
 
 
-	double target_x = buffer;
-	double target_y = s(target_x);
-	double target_dist = sqrt((target_x)*(target_x) + (target_y)*(target_y));
-
-	double x_add_on = 0;
-
 	//Fill up the rest of our path planner after filling it with previous points
-	int n = 50-previous_path_x.size();
 	for(int i=1;i<=n;i++){
 
 		//Update acceleration
@@ -127,7 +133,6 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 		double y_point = s(x_point);
 
 		x_add_on = x_point;
-
 		double x_ref = x_point;
 		double y_ref = y_point;
 
@@ -200,15 +205,15 @@ void Vehicle::predict(vector<vector <double> > sensor_fusion){
 		}
 		else if(check_car.lane == (lane - 1)){
 			//car ahead on the left, moving slower than car's current path
-			slow_car_on_left_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < ref_vel));
+			slow_car_on_left_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < target_speed));
 			//car behind on the left, moving faster than car's current path
-			fast_car_on_left_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > ref_vel));
+			fast_car_on_left_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > target_speed));
 		}
 		else if(check_car.lane == (lane + 1)){
 			//car ahead on the right, moving slower than car's current path
-			slow_car_on_right_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < ref_vel));
+			slow_car_on_right_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < target_speed));
 			//car ahead on the right, moving slower than car's current path
-			fast_car_on_right_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > ref_vel));
+			fast_car_on_right_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > target_speed));
 		}
 	}
 	return;
@@ -223,7 +228,7 @@ void Vehicle::choose_action(){
 	**/
 
 	if(car_straight_ahead){
-		adjust_speed(target_speed);
+		adjust_speed();
 		//cout << "CAR STRAIGHT AHEAD" << endl;
 		if(!slow_car_on_left_ahead && !fast_car_on_left_behind && lane != 0){
 			//Left lane clear, change left
@@ -238,25 +243,26 @@ void Vehicle::choose_action(){
 	}
 	else{
 		//Lane is clear, seek speed limit
-		adjust_speed(SPEED_LIMIT);
+		target_speed = SPEED_LIMIT;
+		adjust_speed();
 	}
 
 	return;
 }
 
-void Vehicle::adjust_speed(double new_speed){
+void Vehicle::adjust_speed(){
 	/**
-	*Sets vehicle's ref_jerk to ramp acceleration up/down as need to reach new_speed
-	*INPUT: Some target speed
+	*Sets vehicle's ref_jerk to ramp acceleration up/down as need to reach target_speed
+	*INPUT: None - Uses vehicle's target_speed value
 	*OUTPUT: None - Sets vehicle's ref_jerk; Sets ref_acc to 0 if needed
 	**/
 
-	if(ref_vel > new_speed-0.5){
+	if(ref_vel > target_speed-0.5){
 		//Ramp down acceleration if moving too fast
 		//cout << "SLOWING DOWN" << endl;
 		ref_jerk = -JERK_LIMIT;
 	}
-	else if(ref_vel < new_speed-0.5){
+	else if(ref_vel < target_speed-0.5){
 		//Ramp up acceleration if moving too slow
 		//cout << "SPEEDING UP" << endl;
 		ref_jerk = JERK_LIMIT;

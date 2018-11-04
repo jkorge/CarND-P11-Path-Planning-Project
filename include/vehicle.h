@@ -76,7 +76,9 @@ public:
 
 	void choose_action();
 
-	void adjust_speed(double new_speed);
+	void adjust_speed();
+
+	vector<double> JMT(vector<double> start_state, vector<double> goal_state, float T);
 
 };
 
