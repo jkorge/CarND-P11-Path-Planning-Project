@@ -118,7 +118,7 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 
 		//Update velocity
 		ref_vel += (0.02 * ref_acc)*2.24;	//2.24 to get vel in mph from mps
-		if(car_straight_ahead && ((abs(ref_vel - target_speed)/2.24) <= (0.02*ACC_LIMIT))){
+		if((abs(ref_vel - target_speed)/2.24) <= (0.02*ACC_LIMIT)){
 			ref_vel = target_speed;
 			ref_acc = 0.0;
 			ref_jerk = 0.0;
@@ -166,7 +166,17 @@ void Vehicle::predict(vector<vector <double> > sensor_fusion){
 
 	int prev_size = previous_path_x.size();
 	Vehicle check_car;
-	double closest_gap = numeric_limits<double>::max();
+
+	//Each lane gets a target_speed
+	//Chosen to be equal to the speed of closest car in front of vehicle in that lane
+	double closest_gap_ahead = numeric_limits<double>::max();
+	double closest_gap_left = numeric_limits<double>::max();
+	double closest_gap_right = numeric_limits<double>::max();
+
+	target_speed_ahead = numeric_limits<double>::max();;
+	target_speed_left = numeric_limits<double>::max();;
+	target_speed_right = numeric_limits<double>::max();;
+
 
 	for (int i=0;i<sensor_fusion.size();i++){
 
@@ -198,9 +208,9 @@ void Vehicle::predict(vector<vector <double> > sensor_fusion){
 			//Car ahead w/in buffer
 			car_straight_ahead |= ((check_car.s > s) && ((check_car.s - s) <= buffer));
 			//Save car's speed as target
-			if(car_straight_ahead && (check_car.s - s < closest_gap)){
-				target_speed = 2.24*check_car.speed;
-				closest_gap = check_car.s - s;
+			if(car_straight_ahead && (check_car.s - s <= closest_gap_ahead)){
+				target_speed_ahead = 2.24*check_car.speed;
+				closest_gap_ahead = check_car.s - s;
 			}
 		}
 		else if(check_car.lane == (lane - 1)){
@@ -208,12 +218,22 @@ void Vehicle::predict(vector<vector <double> > sensor_fusion){
 			slow_car_on_left_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < target_speed));
 			//car behind on the left, moving faster than car's current path
 			fast_car_on_left_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > target_speed));
+
+			if(slow_car_on_left_ahead && (check_car.s - s <= closest_gap_left)){
+				target_speed_left = 2.24*check_car.speed;
+				closest_gap_left = check_car.s - s;
+			}
 		}
 		else if(check_car.lane == (lane + 1)){
 			//car ahead on the right, moving slower than car's current path
 			slow_car_on_right_ahead |= ((check_car.s > s) && (check_car.s - s <= buffer) && (check_car.speed < target_speed));
 			//car ahead on the right, moving slower than car's current path
 			fast_car_on_right_behind |= ((check_car.s < s) && (s - check_car.s <= buffer) && (check_car.speed > target_speed));
+
+			if(slow_car_on_right_ahead && (check_car.s - s <= closest_gap_right)){
+				target_speed_right = 2.24*check_car.speed;
+				closest_gap_right = check_car.s - s;
+			}
 		}
 	}
 	return;
@@ -234,11 +254,16 @@ void Vehicle::choose_action(){
 			//Left lane clear, change left
 			//cout << "LCL" << endl;
 			lane--;
+			target_speed = target_speed_left;
 		}
 		else if(!slow_car_on_right_ahead && !fast_car_on_right_behind && lane != 2){
 			//Can't pass left, right lane clear, change right
 			//cout << "LCR" << endl;
 			lane++;
+			target_speed = target_speed_right;
+		}
+		else{
+			target_speed = target_speed_ahead;
 		}
 	}
 	else{

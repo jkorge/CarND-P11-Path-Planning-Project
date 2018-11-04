@@ -287,6 +287,11 @@ int main() {
           	ego.next_y_vals.clear();
           	ego.previous_path_x.clear();
           	ego.previous_path_y.clear();
+		ego.slow_car_on_left_ahead = false;
+		ego.fast_car_on_left_behind = false;
+		ego.slow_car_on_right_ahead = false;
+		ego.fast_car_on_right_behind = false;
+		ego.car_straight_ahead = false;
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
 

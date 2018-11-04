@@ -35,6 +35,9 @@ public:
 	bool slow_car_on_right_ahead = false;
 	bool fast_car_on_right_behind = false;
 	bool car_straight_ahead = false;
+	double target_speed_ahead;
+	double target_speed_left;
+	double target_speed_right;
 
 	//Remaining values from previous trajectory
 	vector<double> previous_path_x;
@@ -50,7 +53,7 @@ public:
 	double ref_acc = 0.0;
 	double ref_jerk = 0.0;
 	double target_speed = 0.0;
-	int buffer = 45;	//preferred distance from other cars
+	int buffer = 60;	//preferred distance from other cars
 
 	//Trajectory vectors
 	vector<double> next_x_vals;
