@@ -39,7 +39,7 @@ to change lanes.
 
 This is, essentially, a finite state machine which examines a predefined set of possible
 next states. This is a limited mechanism as there are occasions when the main car may
-get stuck in a slow lane. For example, by only check the next lane(s) over, the car
+get stuck in a slow lane. For example, by only checking the next lane(s) over, the car
 misses opportunities to pass traffic by slowing down, getting behind a car in the next
 lane over, and switching lanes again to get ahead of the traffic.
 
@@ -49,7 +49,8 @@ A decision is made by the vehcile in the `Vehicle::choose_action` function in th
 class. This function reads the booleans set by prediction and determines if the car should
 keep moving forward at the speed limit, keep moving forward at the speed of traffic,
 change lanes left and match the speed of traffic there, or change lanes right and match the
-speed of traffic. A call to `Vehicle::adjust_speed` sets the vehicle's jerk to the appropriate limiting value.
+speed of traffic. These are done in a serious of if-else commands which prefer lane changes to the 
+left. A call to `Vehicle::adjust_speed` sets the vehicle's jerk to the appropriate limiting value.
 
 ![Passing Traffic](passing_vehicle.gif)
 
