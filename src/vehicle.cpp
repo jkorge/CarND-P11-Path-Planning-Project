@@ -115,7 +115,6 @@ void Vehicle::generate_trajectory(vector<vector <double> > waypoints){
 		else if(ref_acc <= -ACC_LIMIT){
 			ref_acc = (-ACC_LIMIT)+0.5;
 		}
-
 		//Update velocity
 		ref_vel += (0.02 * ref_acc)*2.24;	//2.24 to get vel in mph from mps
 		if((abs(ref_vel - target_speed)/2.24) <= (0.02*ACC_LIMIT)){
@@ -187,16 +186,6 @@ void Vehicle::predict(vector<vector <double> > sensor_fusion){
 				check_car.lane = i;
 			}
 		}
-		/*
-		if(check_car.d >  && check_car.d < ){
-			check_car.lane = 0;
-		}
-		else if(check_car.d > 4 && check_car.d < 8){
-			check_car.lane = 1;
-		}
-		else if(check_car.d > 8){
-			check_car.lane = 2;
-		}*/
 
 		check_car.vx = sensor_fusion[i][3];
 		check_car.vy = sensor_fusion[i][4];
