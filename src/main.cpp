@@ -8,6 +8,8 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
+#include "spline.h"
+#include "vehicle.h"
 
 using namespace std;
 
@@ -18,6 +20,11 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+
+//ROAD RULES
+const double SPEED_LIMIT = 50.0;	//in mph
+const double ACC_LIMIT = 10.0;		//in mps^2
+const double JERK_LIMIT = 10.0;		//in mps^3
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -166,6 +173,12 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 int main() {
   uWS::Hub h;
 
+  // Instantiate vehicle class object and read in road rules
+  Vehicle ego;
+  ego.SPEED_LIMIT = SPEED_LIMIT;
+  ego.ACC_LIMIT = ACC_LIMIT;
+  ego.JERK_LIMIT = JERK_LIMIT;
+
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
   vector<double> map_waypoints_x;
   vector<double> map_waypoints_y;
@@ -200,7 +213,7 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -218,34 +231,62 @@ int main() {
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          
         	// Main car's localization Data
-          	double car_x = j[1]["x"];
-          	double car_y = j[1]["y"];
-          	double car_s = j[1]["s"];
-          	double car_d = j[1]["d"];
-          	double car_yaw = j[1]["yaw"];
-          	double car_speed = j[1]["speed"];
+          	ego.x = j[1]["x"];
+          	ego.y = j[1]["y"];
+          	ego.s = j[1]["s"];
+          	ego.d = j[1]["d"];
+          	ego.yaw = j[1]["yaw"];
+          	ego.speed = j[1]["speed"];
 
           	// Previous path data given to the Planner
-          	auto previous_path_x = j[1]["previous_path_x"];
-          	auto previous_path_y = j[1]["previous_path_y"];
+          	auto prev_path_x = j[1]["previous_path_x"];
+          	auto prev_path_y = j[1]["previous_path_y"];
+          	for(int i=0;i<prev_path_x.size();i++){
+          		ego.previous_path_x.push_back(prev_path_x[i]);
+          		ego.previous_path_y.push_back(prev_path_y[i]);
+          	}
+
           	// Previous path's end s and d values 
-          	double end_path_s = j[1]["end_path_s"];
-          	double end_path_d = j[1]["end_path_d"];
+          	ego.end_path_s = j[1]["end_path_s"];
+          	ego.end_path_d = j[1]["end_path_d"];
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
 
-          	json msgJson;
+          	// Predict behavior of other vehciles on the road
+          	//cout << "PREDICTION" << endl;
+          	ego.predict(sensor_fusion);
 
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
+          	// Choose next action based on predictions
+          	//cout << "DECISION" << endl;
+          	ego.choose_action();
 
+          	// Update reference values for trajectory generation
+          	ego.ref_x = ego.x;
+          	ego.ref_y = ego.y;
+          	ego.ref_yaw = deg2rad(ego.yaw);
 
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	msgJson["next_x"] = next_x_vals;
-          	msgJson["next_y"] = next_y_vals;
+						// Compute trajectory based on three waypoints
+						int num_waypoints = 3;
+						vector<vector<double> > waypoints;
+						for(int i=1;i<=num_waypoints;i++){
+							//cout << "Buffer: " << i*ego.buffer << ", Lane: " << ego.lane << endl;
+							waypoints.push_back(getXY(ego.s+(i*ego.buffer), (2+4*ego.lane), map_waypoints_s, map_waypoints_x, map_waypoints_y));
+						}
+						//cout << "ACTION" << endl;
+          	ego.generate_trajectory(waypoints);
+
+          	// Send trajectory back to simulator
+						json msgJson;
+          	msgJson["next_x"] = ego.next_x_vals;
+          	msgJson["next_y"] = ego.next_y_vals;
+
+          	// Reset vehicle's trajectory vectors
+          	ego.next_x_vals.clear();
+          	ego.next_y_vals.clear();
+          	ego.previous_path_x.clear();
+          	ego.previous_path_y.clear();
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
